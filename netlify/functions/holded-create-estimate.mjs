@@ -120,10 +120,14 @@ async function createContact(apiKey, contactPayload) {
 async function createEstimate(apiKey, { contactId, items, projectName }) {
   // Holded espera campos numericos como numbers (no strings).
   // tax: numero (21) y/o array de claves de impuestos. Probamos con numero simple.
+  // Holded exige `date` como Unix timestamp en segundos
+  const nowUnix = Math.floor(Date.now() / 1000);
+
   const body = {
     docType: "estimate",
     contactId: String(contactId),
     approved: true,
+    date: nowUnix,
     ...(projectName ? { notes: `Proyecto: ${projectName}` } : {}),
     items: items.map((it) => {
       const subtotalNum = Number(Number(it.subtotal).toFixed(2));
