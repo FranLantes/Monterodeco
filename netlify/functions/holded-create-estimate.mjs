@@ -198,15 +198,21 @@ export const handler = async (event) => {
     // ---------------------------------------------------------------
     if (action === "list_estimates") {
       const list = await holdedRequest("/documents/estimate", { apiKey });
-      const slim = Array.isArray(list)
-        ? list.slice(-10).map((d) => ({
-            id: d.id,
-            docNumber: d.docNumber,
-            contact: d.contactName,
-            date: d.date,
-          }))
-        : list;
-      return jsonResponse(200, { estimates: slim });
+      const filter = payload.filter || "";
+      const arr = Array.isArray(list) ? list : [];
+      const filtered = filter
+        ? arr.filter((d) =>
+            (d.docNumber || "").toLowerCase().includes(filter.toLowerCase()) ||
+            (d.contactName || "").toLowerCase().includes(filter.toLowerCase())
+          )
+        : arr.slice(-10);
+      const slim = filtered.map((d) => ({
+        id: d.id,
+        docNumber: d.docNumber,
+        contact: d.contactName,
+        date: d.date,
+      }));
+      return jsonResponse(200, { count: arr.length, estimates: slim });
     }
 
     // ---------------------------------------------------------------
