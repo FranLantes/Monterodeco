@@ -131,6 +131,19 @@ async function createEstimate(apiKey, { contactId, items, projectName }) {
     ...(projectName ? { notes: `Proyecto: ${projectName}` } : {}),
     items: items.map((it) => {
       const subtotalNum = Number(Number(it.subtotal).toFixed(2));
+      // Linea-titulo: agrupa visualmente las lineas siguientes bajo un encabezado.
+      // Holded acepta `type: "title"` en sus items para este caso.
+      if (it.isTitle) {
+        return {
+          name: String(it.name || "").slice(0, 200),
+          desc: "",
+          units: 0,
+          subtotal: 0,
+          price: 0,
+          tax: 0,
+          type: "title",
+        };
+      }
       return {
         name: String(it.name || "").slice(0, 200),
         desc: String(it.desc || ""),

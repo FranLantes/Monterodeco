@@ -683,6 +683,7 @@ export interface HoldedLineItem {
   desc: string;
   units: number;
   subtotal: number;
+  isTitle?: boolean;
 }
 
 export function buildHoldedItems(
@@ -691,15 +692,24 @@ export function buildHoldedItems(
 ): HoldedLineItem[] {
   const out: HoldedLineItem[] = [];
 
-  // 1) Curtains/estores grouped by room (referencia)
+  // 1) Curtains/estores grouped by room (referencia).
+  // Cada estancia: 1 item-titulo + items de detalle (confeccion, tejidos por nombre, riel)
   const rooms = groupWindowsByRoom(windows);
   for (const room of rooms) {
     const roomLabel = room.name && room.name !== "—" ? room.name : "";
+    if (roomLabel) {
+      out.push({
+        name: roomLabel.toUpperCase(),
+        desc: "",
+        units: 0,
+        subtotal: 0,
+        isTitle: true,
+      });
+    }
     const lineItems = buildWindowLineItems(room.windows);
     for (const li of lineItems) {
-      const name = roomLabel ? `${roomLabel} · ${li.label}` : li.label;
       out.push({
-        name,
+        name: li.label,
         desc: li.description,
         units: 1,
         subtotal: Number(li.amount.toFixed(2)),
@@ -707,16 +717,38 @@ export function buildHoldedItems(
     }
   }
 
-  // 2) Upholstery items (flat, no room grouping — same as PDF)
+  // 2) Upholstery items: agrupados por estancia (referencia) tambien
   if (upholsteryItems.length > 0) {
-    const uphLines = buildUpholsteryLineItems(upholsteryItems);
-    for (const li of uphLines) {
-      out.push({
-        name: li.label,
-        desc: li.description,
-        units: 1,
-        subtotal: Number(li.amount.toFixed(2)),
-      });
+    // Agrupar por referencia
+    const uphMap = new Map<string, UpholsteryEntry[]>();
+    const uphOrder: string[] = [];
+    for (const u of upholsteryItems) {
+      const key = u.config.referencia || "";
+      if (!uphMap.has(key)) {
+        uphMap.set(key, []);
+        uphOrder.push(key);
+      }
+      uphMap.get(key)!.push(u);
+    }
+    for (const key of uphOrder) {
+      if (key) {
+        out.push({
+          name: key.toUpperCase(),
+          desc: "",
+          units: 0,
+          subtotal: 0,
+          isTitle: true,
+        });
+      }
+      const uphLines = buildUpholsteryLineItems(uphMap.get(key)!);
+      for (const li of uphLines) {
+        out.push({
+          name: li.label,
+          desc: li.description,
+          units: 1,
+          subtotal: Number(li.amount.toFixed(2)),
+        });
+      }
     }
   }
 
