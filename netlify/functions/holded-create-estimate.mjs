@@ -194,6 +194,32 @@ export const handler = async (event) => {
 
   try {
     // ---------------------------------------------------------------
+    // ACTION: list_estimates  (TEMPORAL - solo para descubrir formato)
+    // ---------------------------------------------------------------
+    if (action === "list_estimates") {
+      const list = await holdedRequest("/documents/estimate", { apiKey });
+      const slim = Array.isArray(list)
+        ? list.slice(-10).map((d) => ({
+            id: d.id,
+            docNumber: d.docNumber,
+            contact: d.contactName,
+            date: d.date,
+          }))
+        : list;
+      return jsonResponse(200, { estimates: slim });
+    }
+
+    // ---------------------------------------------------------------
+    // ACTION: get_estimate  (TEMPORAL - inspeccionar items y shippingAddress)
+    // ---------------------------------------------------------------
+    if (action === "get_estimate") {
+      const { id } = payload;
+      if (!id) return jsonResponse(400, { error: "missing_id" });
+      const doc = await holdedRequest(`/documents/estimate/${id}`, { apiKey });
+      return jsonResponse(200, { doc });
+    }
+
+    // ---------------------------------------------------------------
     // ACTION: search_contact
     // ---------------------------------------------------------------
     if (action === "search_contact") {
