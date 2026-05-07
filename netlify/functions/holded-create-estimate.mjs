@@ -202,6 +202,29 @@ export const handler = async (event) => {
 
   try {
     // ---------------------------------------------------------------
+    // ACTION: list_estimates / get_estimate (TEMPORAL inspeccion)
+    // ---------------------------------------------------------------
+    if (action === "list_estimates") {
+      const list = await holdedRequest("/documents/estimate", { apiKey });
+      const filter = payload.filter || "";
+      const arr = Array.isArray(list) ? list : [];
+      const filtered = filter
+        ? arr.filter((d) =>
+            (d.docNumber || "").toLowerCase().includes(filter.toLowerCase()) ||
+            (d.contactName || "").toLowerCase().includes(filter.toLowerCase())
+          )
+        : arr.slice(-10);
+      const slim = filtered.map((d) => ({ id: d.id, docNumber: d.docNumber, contact: d.contactName, date: d.date }));
+      return jsonResponse(200, { count: arr.length, estimates: slim });
+    }
+    if (action === "get_estimate") {
+      const { id } = payload;
+      if (!id) return jsonResponse(400, { error: "missing_id" });
+      const doc = await holdedRequest(`/documents/estimate/${id}`, { apiKey });
+      return jsonResponse(200, { doc });
+    }
+
+    // ---------------------------------------------------------------
     // ACTION: search_contact
     // ---------------------------------------------------------------
     if (action === "search_contact") {
