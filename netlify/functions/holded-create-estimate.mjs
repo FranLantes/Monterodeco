@@ -131,32 +131,38 @@ async function createEstimate(apiKey, { contactId, items, projectName }) {
     // Nombre del proyecto va a la direccion de envio personalizada (campo string a nivel raiz).
     // La API de Holded NO soporta lineas-titulo nativas en items, ni shippingAddress como objeto.
     ...(projectName ? { shippingAddress: projectName } : {}),
-    items: items.map((it) => {
-      const subtotalNum = Number(Number(it.subtotal).toFixed(2));
-      // Linea-titulo: la API de Holded no tiene un campo nativo para esto,
-      // pero visualmente se logra con una linea sin precio/unidades, con name destacado.
-      if (it.isTitle) {
-        const titleText = String(it.name || "").trim().slice(0, 200);
-        return {
-          name: `── ${titleText} ──`,
-          desc: "",
-          units: 0,
-          subtotal: 0,
-          price: 0,
-          tax: 0,
-        };
+    // Convertimos las lineas-titulo en un PREFIJO en el `name` de la siguiente linea normal
+    // de la misma estancia. Asi Fran ve la estancia como guia y puede borrar facilmente
+    // ese prefijo en Holded para crear el titulo real.
+    items: (() => {
+      const out = [];
+      let pendingTitle = "";
+      for (const it of items) {
+        if (it.isTitle) {
+          const titleText = String(it.name || "").trim();
+          pendingTitle = titleText ? `── ${titleText} ──` : "";
+          continue;
+        }
+        const subtotalNum = Number(Number(it.subtotal).toFixed(2));
+        const baseName = String(it.name || "");
+        const finalName = pendingTitle
+          ? `${pendingTitle}  ${baseName}`.slice(0, 200)
+          : baseName.slice(0, 200);
+        out.push({
+          name: finalName,
+          desc: String(it.desc || ""),
+          units: Number(it.units ?? 1),
+          subtotal: subtotalNum,
+          tax: 21,
+          // En documentos Holded el campo "price" tambien existe; equivale al precio unitario.
+          // Lo enviamos para evitar que algunos endpoints lo exijan.
+          price: subtotalNum,
+        });
+        // Solo aplicamos el titulo a la primera linea de la estancia
+        pendingTitle = "";
       }
-      return {
-        name: String(it.name || "").slice(0, 200),
-        desc: String(it.desc || ""),
-        units: Number(it.units ?? 1),
-        subtotal: subtotalNum,
-        tax: 21,
-        // En documentos Holded el campo "price" tambien existe; equivale al precio unitario.
-        // Lo enviamos para evitar que algunos endpoints lo exijan.
-        price: subtotalNum,
-      };
-    }),
+      return out;
+    })(),
   };
 
   const res = await holdedRequest("/documents/estimate", {
