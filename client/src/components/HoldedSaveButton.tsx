@@ -50,6 +50,24 @@ type Phase =
 
 const ENDPOINT = "/api/holded-create-estimate";
 
+function formatErr(data: any): string {
+  const base = data?.message || data?.error || "Error desconocido";
+  const detail = data?.detail;
+  if (!detail) return base;
+  // Holded suele devolver { status: false, info: "..." } o { errors: [...] }
+  const info =
+    detail?.info ||
+    detail?.message ||
+    (Array.isArray(detail?.errors) ? detail.errors.join(" · ") : null) ||
+    (typeof detail === "string" ? detail : null);
+  if (info) return `${base} — ${info}`;
+  try {
+    return `${base} — ${JSON.stringify(detail).slice(0, 300)}`;
+  } catch {
+    return base;
+  }
+}
+
 export function HoldedSaveButton({
   projectName,
   contactName,
@@ -103,7 +121,7 @@ export function HoldedSaveButton({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.message || data?.error || "Error desconocido");
+        throw new Error(formatErr(data));
       }
 
       const found: ContactMatch[] = data.matches || [];
@@ -148,7 +166,7 @@ export function HoldedSaveButton({
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data?.message || data?.error || "Error al crear el presupuesto");
+        throw new Error(formatErr(data));
       }
       setResult({
         docNumber: data.estimate?.docNumber || null,

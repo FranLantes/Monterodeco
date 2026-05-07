@@ -118,21 +118,28 @@ async function createContact(apiKey, contactPayload) {
 }
 
 async function createEstimate(apiKey, { contactId, items, projectName }) {
+  // Holded espera campos numericos como numbers (no strings).
+  // tax: numero (21) y/o array de claves de impuestos. Probamos con numero simple.
   const body = {
     docType: "estimate",
-    contactId,
+    contactId: String(contactId),
     approved: true,
-    notes: projectName ? `Proyecto: ${projectName}` : undefined,
-    items: items.map((it) => ({
-      name: it.name,
-      desc: it.desc || "",
-      units: it.units ?? 1,
-      subtotal: Number(it.subtotal.toFixed(2)),
-      tax: 21,
-    })),
+    ...(projectName ? { notes: `Proyecto: ${projectName}` } : {}),
+    items: items.map((it) => {
+      const subtotalNum = Number(Number(it.subtotal).toFixed(2));
+      return {
+        name: String(it.name || "").slice(0, 200),
+        desc: String(it.desc || ""),
+        units: Number(it.units ?? 1),
+        subtotal: subtotalNum,
+        tax: 21,
+        // En documentos Holded el campo "price" tambien existe; equivale al precio unitario.
+        // Lo enviamos para evitar que algunos endpoints lo exijan.
+        price: subtotalNum,
+      };
+    }),
   };
 
-  // El endpoint exacto para crear documento es /documents/{docType}
   const res = await holdedRequest("/documents/estimate", {
     method: "POST",
     apiKey,
