@@ -201,7 +201,21 @@ export const handler = async (event) => {
   const { action } = payload;
 
   try {
-    // ---------------------------------------------------------------
+    if (action === "list_estimates") {
+      const list = await holdedRequest("/documents/estimate", { apiKey });
+      const filter = payload.filter || "";
+      const arr = Array.isArray(list) ? list : [];
+      const filtered = filter
+        ? arr.filter((d) => (d.docNumber || "").toLowerCase().includes(filter.toLowerCase()) || (d.contactName || "").toLowerCase().includes(filter.toLowerCase()))
+        : arr;
+      const sorted = filtered.sort((a,b)=> (b.date||0)-(a.date||0)).slice(0,10);
+      return jsonResponse(200, { count: arr.length, estimates: sorted.map(d => ({ id: d.id, docNumber: d.docNumber, contact: d.contactName, date: d.date })) });
+    }
+    if (action === "get_estimate") {
+      const doc = await holdedRequest(`/documents/estimate/${payload.id}`, { apiKey });
+      return jsonResponse(200, { doc });
+    }
+
     // ACTION: search_contact
     // ---------------------------------------------------------------
     if (action === "search_contact") {
