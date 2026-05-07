@@ -128,20 +128,22 @@ async function createEstimate(apiKey, { contactId, items, projectName }) {
     contactId: String(contactId),
     approved: true,
     date: nowUnix,
-    ...(projectName ? { notes: `Proyecto: ${projectName}` } : {}),
+    // Nombre del proyecto va a la direccion de envio personalizada (campo string a nivel raiz).
+    // La API de Holded NO soporta lineas-titulo nativas en items, ni shippingAddress como objeto.
+    ...(projectName ? { shippingAddress: projectName } : {}),
     items: items.map((it) => {
       const subtotalNum = Number(Number(it.subtotal).toFixed(2));
-      // Linea-titulo: agrupa visualmente las lineas siguientes bajo un encabezado.
-      // Holded acepta `type: "title"` en sus items para este caso.
+      // Linea-titulo: la API de Holded no tiene un campo nativo para esto,
+      // pero visualmente se logra con una linea sin precio/unidades, con name destacado.
       if (it.isTitle) {
+        const titleText = String(it.name || "").trim().slice(0, 200);
         return {
-          name: String(it.name || "").slice(0, 200),
+          name: `── ${titleText} ──`,
           desc: "",
           units: 0,
           subtotal: 0,
           price: 0,
           tax: 0,
-          type: "title",
         };
       }
       return {
@@ -193,38 +195,6 @@ export const handler = async (event) => {
   const { action } = payload;
 
   try {
-    // ---------------------------------------------------------------
-    // ACTION: list_estimates  (TEMPORAL - solo para descubrir formato)
-    // ---------------------------------------------------------------
-    if (action === "list_estimates") {
-      const list = await holdedRequest("/documents/estimate", { apiKey });
-      const filter = payload.filter || "";
-      const arr = Array.isArray(list) ? list : [];
-      const filtered = filter
-        ? arr.filter((d) =>
-            (d.docNumber || "").toLowerCase().includes(filter.toLowerCase()) ||
-            (d.contactName || "").toLowerCase().includes(filter.toLowerCase())
-          )
-        : arr.slice(-10);
-      const slim = filtered.map((d) => ({
-        id: d.id,
-        docNumber: d.docNumber,
-        contact: d.contactName,
-        date: d.date,
-      }));
-      return jsonResponse(200, { count: arr.length, estimates: slim });
-    }
-
-    // ---------------------------------------------------------------
-    // ACTION: get_estimate  (TEMPORAL - inspeccionar items y shippingAddress)
-    // ---------------------------------------------------------------
-    if (action === "get_estimate") {
-      const { id } = payload;
-      if (!id) return jsonResponse(400, { error: "missing_id" });
-      const doc = await holdedRequest(`/documents/estimate/${id}`, { apiKey });
-      return jsonResponse(200, { doc });
-    }
-
     // ---------------------------------------------------------------
     // ACTION: search_contact
     // ---------------------------------------------------------------
