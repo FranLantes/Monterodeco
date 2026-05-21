@@ -754,3 +754,260 @@ export function buildHoldedItems(
 
   return out;
 }
+
+
+// =================================================================
+// HOJA DE TRABAJO (taller) - A4 en 4 cuartos recortables
+// Cada cuarto = 1 estancia (1+ ventanas dentro)
+// REGLA: en wave 60 la altura sale con -1 cm (descuento confección)
+// =================================================================
+
+interface WorkCell {
+  referencia: string;
+  windows: WindowEntry[];
+}
+
+function tipoConfeccionWorkLabel(tipo: string): string {
+  const MAP: Record<string, string> = {
+    wave60: 'Wave 60',
+    frunce_simple: 'Frunce frances simple',
+    frunce_doble: 'Frunce frances doble',
+    frunce_triple: 'Frunce frances triple',
+    liso: 'Liso',
+    liso_aquaquae: 'Liso Aquaquae',
+    blackout: 'Black out',
+  };
+  return MAP[tipo] ?? tipo;
+}
+
+// Agrupa ventanas por referencia (estancia)
+function groupByRoom(windows: WindowEntry[]): WorkCell[] {
+  const map = new Map<string, WindowEntry[]>();
+  const order: string[] = [];
+  for (const w of windows) {
+    const key = (w.config.referencia || '—').trim();
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
+    }
+    map.get(key)!.push(w);
+  }
+  return order.map(k => ({ referencia: k, windows: map.get(k)! }));
+}
+
+// Devuelve el alto efectivo de la ventana para la hoja de trabajo.
+// REGLA: si es wave 60 se resta 1 cm (lo que se descuenta en la confeccion wave)
+function altoEfectivo(w: WindowEntry): number {
+  if (w.config.tipoConfeccion === 'wave60') {
+    return Math.max(0, w.config.altoCm - 1);
+  }
+  return w.config.altoCm;
+}
+
+// Dibuja UNA ficha-ventana dentro de un area dada
+// Devuelve true si pudo dibujarla
+function drawWindowCard(
+  doc: jsPDF,
+  w: WindowEntry,
+  isTechoSuelo: boolean,
+  // Area disponible
+  x: number,
+  y: number,
+  cardW: number,
+  cardH: number,
+) {
+  const { config, result } = w;
+  const altoVisible = altoEfectivo(w);
+
+  // Espaciado interior
+  const padX = 6;
+  // Espacio reservado arriba para "ancho", abajo para tipo+tejido (+caidas si hay rotacion)
+  const labelTop = 5;       // mm reservados arriba del recuadro para el ancho
+  const labelRight = 10;    // mm reservados a la derecha para el alto vertical
+  const labelBottom = 9;    // mm reservados abajo para caidas (si hay) + tipo + tejido
+  const extraBottom = result.rotation.hayQueGirar ? 4 : 0;
+
+  // Recuadro de la ventana
+  const rectX = x + padX;
+  const rectY = y + labelTop + 1;
+  const rectW = cardW - padX * 2 - labelRight;
+  const rectH = cardH - labelTop - labelBottom - extraBottom - 2;
+
+  // ANCHO (encima del recuadro, centrado)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...hexToRGB(C_BLACK));
+  doc.text(String(config.anchoCm), rectX + rectW / 2, y + labelTop - 0.5, { align: "center" });
+
+  // ALTO (a la derecha del recuadro, vertical)
+  // Si techo-suelo y no hay rotacion mostramos "232.5 t/s", si no solo el numero.
+  // Si hay rotacion no anadimos t/s (cabe debajo "1C1/4" etc).
+  const altoStr = isTechoSuelo && !result.rotation.hayQueGirar
+    ? `${altoVisible} t/s`
+    : `${altoVisible}`;
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  const altoX = rectX + rectW + 5;
+  const altoY = rectY + rectH / 2;
+  // Texto vertical (rotado 90 grados CCW)
+  doc.text(altoStr, altoX, altoY, { angle: 90, align: "center" });
+
+  // RECUADRO
+  doc.setDrawColor(...hexToRGB(C_BORDER));
+  doc.setLineWidth(0.5);
+  doc.rect(rectX, rectY, rectW, rectH);
+
+  // Linea divisoria central si hay 2 hojas
+  if (result.hojas.length >= 2) {
+    const midX = rectX + rectW / 2;
+    doc.setDrawColor(...hexToRGB(C_TEAL));
+    doc.setLineDashPattern([1.2, 1.2], 0);
+    doc.line(midX, rectY + 3, midX, rectY + rectH - 3);
+    doc.setLineDashPattern([], 0);
+  }
+
+  // Contenido por hoja: ganchos/espacios arriba, cm de tela abajo
+  doc.setTextColor(...hexToRGB(C_NAVY));
+  const numHojas = result.hojas.length;
+  for (let i = 0; i < numHojas; i++) {
+    const h = result.hojas[i];
+    const colX = rectX + (rectW / numHojas) * i + (rectW / numHojas) / 2;
+    // Indicador arriba (gancho wave / espacios+crestas frunce)
+    let topLabel = '';
+    if (h.ganchos !== undefined) {
+      topLabel = `${h.ganchos}g`;
+    } else if (h.espacios !== undefined && h.crestas !== undefined) {
+      topLabel = `${h.espacios}/${h.crestas}`;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(topLabel, colX, rectY + 9, { align: "center" });
+    // Centimetros de tela abajo
+    doc.setFontSize(13);
+    doc.text(String(Math.round(h.telaCm)), colX, rectY + rectH - 5, { align: "center" });
+    // Caidas debajo del recuadro (si hubo que girar)
+    if (result.rotation.hayQueGirar && h.caidasFormatted) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(...hexToRGB(C_MUTED));
+      doc.text(h.caidasFormatted, colX, rectY + rectH + 3.5, { align: "center" });
+      doc.setTextColor(...hexToRGB(C_NAVY));
+    }
+  }
+}
+
+// Dibuja un cuadrante (una estancia con 1+ ventanas)
+function drawQuadrant(
+  doc: jsPDF,
+  projectName: string,
+  cell: WorkCell,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  // Cabecera: proyecto + estancia
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...hexToRGB(C_NAVY));
+  doc.text(projectName || "Monterodeco", x + 4, y + 5);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...hexToRGB(C_TEAL));
+  doc.text(cell.referencia, x + 4, y + 10);
+
+  // Pie: tipo confeccion + nombre tejido (uno por cuadrante; tomamos los de la primera ventana)
+  const first = cell.windows[0];
+  const tipoLabel = tipoConfeccionWorkLabel(first.config.tipoConfeccion);
+  const tejidoLabel = `${first.config.nombreTejido || ''}`.trim();
+
+  // Area disponible para ventanas
+  const innerX = x + 2;
+  const innerY = y + 13;
+  const innerW = w - 4;
+  const innerH = h - 13 - 9; // dejamos 9mm abajo para pie
+
+  const n = cell.windows.length;
+  // Distribucion adaptativa
+  let cols: number;
+  let rows: number;
+  if (n === 1) { cols = 1; rows = 1; }
+  else if (n === 2) { cols = 2; rows = 1; }
+  else if (n === 3) { cols = 3; rows = 1; }
+  else { cols = 2; rows = 2; } // 4 o mas, primeras 4
+
+  const cellW = innerW / cols;
+  const cellH = innerH / rows;
+
+  const isTechoSuelo = first.config.tipoRiel === 'riel7600';
+
+  for (let i = 0; i < Math.min(n, cols * rows); i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const wx = innerX + c * cellW;
+    const wy = innerY + r * cellH;
+    drawWindowCard(doc, cell.windows[i], isTechoSuelo, wx, wy, cellW, cellH);
+  }
+
+  // Pie de cuadrante
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...hexToRGB(C_NAVY));
+  doc.text(tipoLabel, x + w / 2, y + h - 5, { align: "center" });
+  if (tejidoLabel) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...hexToRGB(C_MUTED));
+    doc.text(tejidoLabel, x + w / 2, y + h - 1.5, { align: "center" });
+  }
+}
+
+function drawCutMarks(doc: jsPDF) {
+  doc.setDrawColor(...hexToRGB(C_MUTED));
+  doc.setLineWidth(0.2);
+  doc.setLineDashPattern([1.5, 1.5], 0);
+  // Vertical
+  doc.line(PW / 2, 6, PW / 2, PH - 6);
+  // Horizontal
+  doc.line(6, PH / 2, PW - 6, PH / 2);
+  doc.setLineDashPattern([], 0);
+}
+
+export function generateWorkSheet(
+  projectInfo: ProjectInfo,
+  windows: WindowEntry[],
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const cells = groupByRoom(windows);
+  if (cells.length === 0) {
+    doc.setFontSize(12);
+    doc.text("No hay ventanas para generar la hoja de trabajo.", 20, 30);
+    const safe = (projectInfo.nombreProyecto || "proyecto").replace(/[^a-zA-Z0-9_-]+/g, "_");
+    doc.save(`Hoja_Trabajo_${safe}.pdf`);
+    return;
+  }
+
+  const quadW = PW / 2;
+  const quadH = PH / 2;
+
+  let firstPage = true;
+  for (let i = 0; i < cells.length; i += 4) {
+    if (!firstPage) doc.addPage();
+    firstPage = false;
+    drawCutMarks(doc);
+
+    const slice = cells.slice(i, i + 4);
+    for (let j = 0; j < slice.length; j++) {
+      const col = j % 2;
+      const row = Math.floor(j / 2);
+      const x = col * quadW;
+      const y = row * quadH;
+      drawQuadrant(doc, projectInfo.nombreProyecto || "Monterodeco", slice[j], x + 4, y + 4, quadW - 8, quadH - 8);
+    }
+  }
+
+  const safe = (projectInfo.nombreProyecto || "proyecto").replace(/[^a-zA-Z0-9_-]+/g, "_");
+  doc.save(`Hoja_Trabajo_${safe}.pdf`);
+}

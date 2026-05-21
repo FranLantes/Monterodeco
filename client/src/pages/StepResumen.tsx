@@ -8,10 +8,10 @@ import {
   confeccionLabel,
 } from "@/lib/calculations";
 import { tapiceriaLabel } from "@/lib/upholsteryCalculations";
-import { generatePDF } from "@/lib/pdfGenerator";
+import { generatePDF, generateWorkSheet } from "@/lib/pdfGenerator";
 import { WindowDiagramGrid } from "@/components/MonterodecoDiagramas";
 import { HoldedSaveButton } from "@/components/HoldedSaveButton";
-import { Download, ChevronLeft } from "lucide-react";
+import { Download, ChevronLeft, ClipboardList } from "lucide-react";
 
 export default function StepResumen() {
   const {
@@ -34,6 +34,10 @@ export default function StepResumen() {
     generatePDF(projectInfo, windows, intermediarios, upholsteryItems);
   }
 
+  function handleDownloadWorkSheet() {
+    generateWorkSheet(projectInfo, windows);
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       {/* Header */}
@@ -53,6 +57,18 @@ export default function StepResumen() {
             windows={windows}
             upholsteryItems={upholsteryItems}
           />
+          {windows.length > 0 && (
+            <Button
+              onClick={handleDownloadWorkSheet}
+              data-testid="button-downloadWorkSheet"
+              variant="outline"
+              className="gap-2"
+              size="lg"
+            >
+              <ClipboardList className="w-4 h-4" />
+              Hoja de trabajo
+            </Button>
+          )}
           <Button
             onClick={handleDownloadPDF}
             data-testid="button-downloadPDF"
@@ -175,6 +191,12 @@ export default function StepResumen() {
             windows={windows}
             upholsteryItems={upholsteryItems}
           />
+          {windows.length > 0 && (
+            <Button onClick={handleDownloadWorkSheet} data-testid="button-downloadWorkSheet2" variant="outline" className="gap-2">
+              <ClipboardList className="w-4 h-4" />
+              Hoja de trabajo
+            </Button>
+          )}
           <Button onClick={handleDownloadPDF} data-testid="button-downloadPDF2" className="gap-2">
             <Download className="w-4 h-4" />
             Descargar PDF
