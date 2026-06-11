@@ -934,8 +934,7 @@ function drawQuadrant(
   let rows: number;
   if (n === 1) { cols = 1; rows = 1; }
   else if (n === 2) { cols = 2; rows = 1; }
-  else if (n === 3) { cols = 3; rows = 1; }
-  else { cols = 2; rows = 2; } // 4 o mas, primeras 4
+  else { cols = 2; rows = 2; } // 3-4 ventanas: 2x2 con esquina vacia si n=3
 
   const cellW = innerW / cols;
   const cellH = innerH / rows;
